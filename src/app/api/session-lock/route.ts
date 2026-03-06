@@ -114,7 +114,9 @@ export async function POST(request: NextRequest) {
 
   let uid = "";
   try {
-    const decoded = await getAdminAuth().verifyIdToken(bearerToken, true);
+    // Claim is the only high-trust transition; heartbeat/release prefer lower latency.
+    const checkRevoked = action === "claim";
+    const decoded = await getAdminAuth().verifyIdToken(bearerToken, checkRevoked);
     uid = decoded.uid || "";
   } catch {
     return jsonNoStore({ success: false, error: "AUTH_INVALID" }, { status: 401 });
