@@ -140,98 +140,164 @@ export async function POST(request: NextRequest) {
   const deviceRef = db.doc(`users/${uid}/devices/${deviceIdHash}`);
   const eventsRef = db.collection(`users/${uid}/loginEvents`);
 
-  if (action === "claim") {
-    const claimResult = await db.runTransaction(async (tx) => {
-      const existingSnap = await tx.get(sessionRef);
-      const existing = (existingSnap.exists ? existingSnap.data() : null) as SessionDoc | null;
-      const previousLeaseId =
-        typeof existing?.leaseId === "string" ? existing.leaseId.trim() : "";
-      const previousDeviceId =
-        typeof existing?.deviceIdHash === "string"
-          ? existing.deviceIdHash.trim().toLowerCase()
-          : "";
+  try {
+    if (action === "claim") {
+      const claimResult = await db.runTransaction(async (tx) => {
+        // Firestore transactions require all reads before writes.
+        const [existingSnap, deviceSnap] = await Promise.all([
+          tx.get(sessionRef),
+          tx.get(deviceRef),
+        ]);
+        const existing = (existingSnap.exists
+          ? existingSnap.data()
+          : null) as SessionDoc | null;
+        const previousLeaseId =
+          typeof existing?.leaseId === "string" ? existing.leaseId.trim() : "";
+        const previousDeviceId =
+          typeof existing?.deviceIdHash === "string"
+            ? existing.deviceIdHash.trim().toLowerCase()
+            : "";
 
-      const leaseId = randomUUID();
-      const nowMs = Date.now();
-      const expiresAtMs = nowMs + LEASE_TTL_MS;
+        const leaseId = randomUUID();
+        const nowMs = Date.now();
+        const expiresAtMs = nowMs + LEASE_TTL_MS;
 
-      tx.set(
-        sessionRef,
-        {
-          leaseId,
+        tx.set(
+          sessionRef,
+          {
+            leaseId,
+            deviceIdHash,
+            appVersion: appVersion || null,
+            platform: platform || null,
+            claimedAt: FieldValue.serverTimestamp(),
+            lastHeartbeatAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            expiresAtMs,
+          },
+          { merge: false }
+        );
+
+        const devicePayload: Record<string, unknown> = {
+          uid,
           deviceIdHash,
           appVersion: appVersion || null,
           platform: platform || null,
-          claimedAt: FieldValue.serverTimestamp(),
-          lastHeartbeatAt: FieldValue.serverTimestamp(),
+          lastSeenAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-          expiresAtMs,
-        },
-        { merge: false }
-      );
+        };
+        if (!deviceSnap.exists) {
+          devicePayload.firstSeenAt = FieldValue.serverTimestamp();
+        }
+        tx.set(deviceRef, devicePayload, { merge: true });
 
-      const deviceSnap = await tx.get(deviceRef);
-      const devicePayload: Record<string, unknown> = {
-        uid,
-        deviceIdHash,
-        appVersion: appVersion || null,
-        platform: platform || null,
-        lastSeenAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      if (!deviceSnap.exists) {
-        devicePayload.firstSeenAt = FieldValue.serverTimestamp();
-      }
-      tx.set(deviceRef, devicePayload, { merge: true });
-
-      return {
-        leaseId,
-        replaced:
-          Boolean(previousLeaseId) &&
-          previousLeaseId !== leaseId &&
-          Boolean(previousDeviceId) &&
-          previousDeviceId !== deviceIdHash,
-        previousDeviceId: previousDeviceId || null,
-        nowMs,
-      };
-    });
-
-    try {
-      await eventsRef.add({
-        type: claimResult.replaced ? "claim_replaced" : "claim",
-        uid,
-        deviceIdHash,
-        previousDeviceId: claimResult.previousDeviceId,
-        leaseId: claimResult.leaseId,
-        appVersion: appVersion || null,
-        platform: platform || null,
-        createdAt: FieldValue.serverTimestamp(),
+        return {
+          leaseId,
+          replaced:
+            Boolean(previousLeaseId) &&
+            previousLeaseId !== leaseId &&
+            Boolean(previousDeviceId) &&
+            previousDeviceId !== deviceIdHash,
+          previousDeviceId: previousDeviceId || null,
+          nowMs,
+        };
       });
-    } catch {
-      // best effort analytics/audit
+
+      try {
+        await eventsRef.add({
+          type: claimResult.replaced ? "claim_replaced" : "claim",
+          uid,
+          deviceIdHash,
+          previousDeviceId: claimResult.previousDeviceId,
+          leaseId: claimResult.leaseId,
+          appVersion: appVersion || null,
+          platform: platform || null,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch {
+        // best effort analytics/audit
+      }
+
+      return jsonNoStore({
+        success: true,
+        status: "active",
+        leaseId: claimResult.leaseId,
+        heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+        leaseTtlMs: LEASE_TTL_MS,
+        replaced: claimResult.replaced,
+        serverTimeMs: claimResult.nowMs,
+      });
     }
 
-    return jsonNoStore({
-      success: true,
-      status: "active",
-      leaseId: claimResult.leaseId,
-      heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
-      leaseTtlMs: LEASE_TTL_MS,
-      replaced: claimResult.replaced,
-      serverTimeMs: claimResult.nowMs,
-    });
-  }
+    const leaseId = sanitizeLeaseId(payload.leaseId);
+    if (!leaseId) {
+      return jsonNoStore({ success: false, error: "LEASE_ID_REQUIRED" }, { status: 400 });
+    }
 
-  const leaseId = sanitizeLeaseId(payload.leaseId);
-  if (!leaseId) {
-    return jsonNoStore({ success: false, error: "LEASE_ID_REQUIRED" }, { status: 400 });
-  }
+    if (action === "heartbeat") {
+      const heartbeatResult = await db.runTransaction(async (tx) => {
+        const currentSnap = await tx.get(sessionRef);
+        if (!currentSnap.exists) {
+          return { active: false, reason: "NO_ACTIVE_SESSION" as const };
+        }
 
-  if (action === "heartbeat") {
-    const heartbeatResult = await db.runTransaction(async (tx) => {
+        const current = currentSnap.data() as SessionDoc;
+        const currentLeaseId =
+          typeof current.leaseId === "string" ? current.leaseId.trim() : "";
+        const currentDeviceId =
+          typeof current.deviceIdHash === "string"
+            ? current.deviceIdHash.trim().toLowerCase()
+            : "";
+        if (!currentLeaseId || !currentDeviceId) {
+          return { active: false, reason: "INVALID_SESSION_STATE" as const };
+        }
+        if (currentLeaseId !== leaseId || currentDeviceId !== deviceIdHash) {
+          return { active: false, reason: "SESSION_REPLACED" as const };
+        }
+
+        tx.update(sessionRef, {
+          lastHeartbeatAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          expiresAtMs: Date.now() + LEASE_TTL_MS,
+          appVersion: appVersion || null,
+          platform: platform || null,
+        });
+        tx.set(
+          deviceRef,
+          {
+            uid,
+            deviceIdHash,
+            appVersion: appVersion || null,
+            platform: platform || null,
+            lastSeenAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        return { active: true as const };
+      });
+
+      if (!heartbeatResult.active) {
+        return jsonNoStore({
+          success: false,
+          status: "revoked",
+          reason: heartbeatResult.reason,
+        });
+      }
+
+      return jsonNoStore({
+        success: true,
+        status: "active",
+        leaseId,
+        heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+        leaseTtlMs: LEASE_TTL_MS,
+        serverTimeMs: Date.now(),
+      });
+    }
+
+    const releaseResult = await db.runTransaction(async (tx) => {
       const currentSnap = await tx.get(sessionRef);
       if (!currentSnap.exists) {
-        return { active: false, reason: "NO_ACTIVE_SESSION" as const };
+        return { released: false };
       }
 
       const current = currentSnap.data() as SessionDoc;
@@ -241,93 +307,44 @@ export async function POST(request: NextRequest) {
         typeof current.deviceIdHash === "string"
           ? current.deviceIdHash.trim().toLowerCase()
           : "";
-      if (!currentLeaseId || !currentDeviceId) {
-        return { active: false, reason: "INVALID_SESSION_STATE" as const };
-      }
       if (currentLeaseId !== leaseId || currentDeviceId !== deviceIdHash) {
-        return { active: false, reason: "SESSION_REPLACED" as const };
+        return { released: false };
       }
 
-      tx.update(sessionRef, {
-        lastHeartbeatAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        expiresAtMs: Date.now() + LEASE_TTL_MS,
-        appVersion: appVersion || null,
-        platform: platform || null,
-      });
-      tx.set(
-        deviceRef,
-        {
-          uid,
-          deviceIdHash,
-          appVersion: appVersion || null,
-          platform: platform || null,
-          lastSeenAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      return { active: true as const };
+      tx.delete(sessionRef);
+      return { released: true };
     });
 
-    if (!heartbeatResult.active) {
-      return jsonNoStore({
-        success: false,
-        status: "revoked",
-        reason: heartbeatResult.reason,
-      });
+    if (releaseResult.released) {
+      try {
+        await eventsRef.add({
+          type: "release",
+          uid,
+          deviceIdHash,
+          leaseId,
+          appVersion: appVersion || null,
+          platform: platform || null,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch {
+        // best effort analytics/audit
+      }
     }
 
     return jsonNoStore({
       success: true,
-      status: "active",
-      leaseId,
-      heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
-      leaseTtlMs: LEASE_TTL_MS,
-      serverTimeMs: Date.now(),
+      status: "released",
+      released: releaseResult.released,
     });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error || "unknown");
+    return jsonNoStore(
+      {
+        success: false,
+        error: "SESSION_LOCK_INTERNAL_ERROR",
+        message,
+      },
+      { status: 500 }
+    );
   }
-
-  const releaseResult = await db.runTransaction(async (tx) => {
-    const currentSnap = await tx.get(sessionRef);
-    if (!currentSnap.exists) {
-      return { released: false };
-    }
-
-    const current = currentSnap.data() as SessionDoc;
-    const currentLeaseId =
-      typeof current.leaseId === "string" ? current.leaseId.trim() : "";
-    const currentDeviceId =
-      typeof current.deviceIdHash === "string"
-        ? current.deviceIdHash.trim().toLowerCase()
-        : "";
-    if (currentLeaseId !== leaseId || currentDeviceId !== deviceIdHash) {
-      return { released: false };
-    }
-
-    tx.delete(sessionRef);
-    return { released: true };
-  });
-
-  if (releaseResult.released) {
-    try {
-      await eventsRef.add({
-        type: "release",
-        uid,
-        deviceIdHash,
-        leaseId,
-        appVersion: appVersion || null,
-        platform: platform || null,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    } catch {
-      // best effort analytics/audit
-    }
-  }
-
-  return jsonNoStore({
-    success: true,
-    status: "released",
-    released: releaseResult.released,
-  });
 }
