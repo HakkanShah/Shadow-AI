@@ -18,20 +18,31 @@ const toIsoOrNull = (value?: string): string | null => {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 };
 
+const normalizePlan = (raw: unknown): BillingPlan => {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "monthly") return "monthly";
+  if (value === "semiannual") return "semiannual";
+  if (value === "yearly") return "yearly";
+  if (value === "lifetime") return "lifetime";
+  return "free";
+};
+
 const readBilling = (
   data: DocumentData | undefined
-): { plan: BillingPlan; activatedAt: string | null } => {
-  if (!data) return { plan: "free", activatedAt: null };
+): { plan: BillingPlan; activatedAt: string | null; expiresAt: string | null } => {
+  if (!data) return { plan: "free", activatedAt: null, expiresAt: null };
   const normalized = serializeFirestoreValue(data) as Record<string, unknown>;
-  const plan = normalized.plan === "lifetime" ? "lifetime" : "free";
+  const plan = normalizePlan(normalized.plan);
   const activatedAt =
     typeof normalized.activatedAt === "string" ? normalized.activatedAt : null;
-  return { plan, activatedAt };
+  const expiresAt =
+    typeof normalized.expiresAt === "string" ? normalized.expiresAt : null;
+  return { plan, activatedAt, expiresAt };
 };
 
 const mapUser = (
   user: UserRecord,
-  billing: { plan: BillingPlan; activatedAt: string | null }
+  billing: { plan: BillingPlan; activatedAt: string | null; expiresAt: string | null }
 ): AdminUserSummary => {
   return {
     uid: user.uid,
@@ -45,6 +56,7 @@ const mapUser = (
     lastSignInTime: toIsoOrNull(user.metadata.lastSignInTime),
     billingPlan: billing.plan,
     billingActivatedAt: billing.activatedAt,
+    billingExpiresAt: billing.expiresAt,
   };
 };
 
@@ -83,7 +95,7 @@ export async function GET(request: NextRequest) {
     const billingSnapshots =
       billingRefs.length > 0 ? await adminDb.getAll(...billingRefs) : [];
 
-    const billingByUid = new Map<string, { plan: BillingPlan; activatedAt: string | null }>();
+    const billingByUid = new Map<string, { plan: BillingPlan; activatedAt: string | null; expiresAt: string | null }>();
     billingSnapshots.forEach((snapshot, index) => {
       const user = users[index];
       if (!user) return;
@@ -91,7 +103,7 @@ export async function GET(request: NextRequest) {
     });
 
     const payload = users.map((user) =>
-      mapUser(user, billingByUid.get(user.uid) || { plan: "free", activatedAt: null })
+      mapUser(user, billingByUid.get(user.uid) || { plan: "free", activatedAt: null, expiresAt: null })
     );
 
     return NextResponse.json({
@@ -101,8 +113,9 @@ export async function GET(request: NextRequest) {
       actedBy: session.email || session.uid,
     });
   } catch (error) {
+    console.error("FAILED_TO_LIST_USERS", { error, actedBy: session.email || session.uid });
     return NextResponse.json(
-      { error: "FAILED_TO_LIST_USERS", message: String(error) },
+      { error: "FAILED_TO_LIST_USERS" },
       { status: 500 }
     );
   }

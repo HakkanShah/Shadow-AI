@@ -14,6 +14,15 @@ const toIsoOrNull = (value?: string): string | null => {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 };
 
+const normalizePlan = (raw: unknown): AdminUserDetail["user"]["billingPlan"] => {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "monthly") return "monthly";
+  if (value === "semiannual") return "semiannual";
+  if (value === "yearly") return "yearly";
+  if (value === "lifetime") return "lifetime";
+  return "free";
+};
+
 const readRecentCollection = async (
   adminDb: ReturnType<typeof getAdminDb>,
   path: string,
@@ -54,9 +63,11 @@ export async function GET(request: NextRequest, context: Params) {
     const billingData = billingSnapshot.exists
       ? (serializeFirestoreValue(billingSnapshot.data()) as Record<string, unknown>)
       : null;
-    const billingPlan = billingData?.plan === "lifetime" ? "lifetime" : "free";
+    const billingPlan = normalizePlan(billingData?.plan);
     const billingActivatedAt =
       typeof billingData?.activatedAt === "string" ? billingData.activatedAt : null;
+    const billingExpiresAt =
+      typeof billingData?.expiresAt === "string" ? billingData.expiresAt : null;
 
     const [devices, logins, events] = await Promise.all([
       readRecentCollection(adminDb, `users/${uid}/devices`, "lastSeenAt"),
@@ -77,6 +88,7 @@ export async function GET(request: NextRequest, context: Params) {
         createdAt: toIsoOrNull(user.metadata.creationTime),
         billingPlan,
         billingActivatedAt,
+        billingExpiresAt,
       },
       devices,
       logins,
@@ -91,8 +103,9 @@ export async function GET(request: NextRequest, context: Params) {
       actedBy: session.email || session.uid,
     });
   } catch (error) {
+    console.error("FAILED_TO_LOAD_USER", { uid, error, actedBy: session.email || session.uid });
     return NextResponse.json(
-      { error: "FAILED_TO_LOAD_USER", message: String(error) },
+      { error: "FAILED_TO_LOAD_USER" },
       { status: 500 }
     );
   }

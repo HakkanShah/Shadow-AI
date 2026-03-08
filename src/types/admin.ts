@@ -1,4 +1,4 @@
-export type BillingPlan = "free" | "lifetime";
+export type BillingPlan = "free" | "monthly" | "semiannual" | "yearly" | "lifetime";
 
 export type AdminUserSummary = {
   uid: string;
@@ -12,6 +12,7 @@ export type AdminUserSummary = {
   createdAt: string | null;
   billingPlan: BillingPlan;
   billingActivatedAt: string | null;
+  billingExpiresAt: string | null;
 };
 
 export type ActivityRecord = {

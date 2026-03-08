@@ -16,7 +16,7 @@ This app is designed to be deployed separately (for example on Vercel) from the 
   - Optional email allowlist via `ADMIN_ALLOWLIST_EMAILS`
 - Manual billing management:
   - Updates `users/{uid}/billing/state` in Firestore
-  - Supports plan `free` / `lifetime`
+  - Supports plan `free` / `monthly` / `semiannual` / `yearly` / `lifetime`
 - User status management:
   - Enable/disable Firebase Auth users
 - User telemetry viewer:

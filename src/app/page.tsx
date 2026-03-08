@@ -31,7 +31,7 @@ export default function Home() {
         <section className={styles.features}>
           <article>
             <h2>Admin Controls</h2>
-            <p>Search users, open account profiles, manually activate lifetime plans, and manage account status.</p>
+            <p>Search users, open account profiles, manually activate any membership plan, and manage account status.</p>
           </article>
           <article>
             <h2>Security First</h2>

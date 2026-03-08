@@ -135,7 +135,8 @@
 }
 
 .planLifetime,
-.planFree {
+.planFree,
+.planPaid {
   border-radius: 999px;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -152,6 +153,11 @@
 .planFree {
   color: #92400e;
   background: #fef3c7;
+}
+
+.planPaid {
+  color: #1e3a8a;
+  background: #dbeafe;
 }
 
 .userItem p {

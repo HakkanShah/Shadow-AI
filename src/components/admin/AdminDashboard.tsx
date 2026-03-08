@@ -29,6 +29,12 @@ const prettyValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
+const getPlanClassName = (plan: BillingPlan): string => {
+  if (plan === "lifetime") return styles.planLifetime;
+  if (plan === "monthly" || plan === "semiannual" || plan === "yearly") return styles.planPaid;
+  return styles.planFree;
+};
+
 export default function AdminDashboard({ adminLabel }: Props) {
   const router = useRouter();
   const auth = useMemo(() => getFirebaseAuth(), []);
@@ -210,9 +216,7 @@ export default function AdminDashboard({ adminLabel }: Props) {
                 <div className={styles.userHead}>
                   <strong>{user.displayName || user.email || user.uid}</strong>
                   <span
-                    className={
-                      user.billingPlan === "lifetime" ? styles.planLifetime : styles.planFree
-                    }
+                    className={getPlanClassName(user.billingPlan)}
                   >
                     {user.billingPlan}
                   </span>
@@ -262,6 +266,7 @@ export default function AdminDashboard({ adminLabel }: Props) {
                 <h3>Billing (Manual)</h3>
                 <p>Current Plan: {selectedUser.billingPlan}</p>
                 <p>Activated At: {selectedUser.billingActivatedAt || "-"}</p>
+                <p>Expires At: {selectedUser.billingExpiresAt || "-"}</p>
                 <div className={styles.formGrid}>
                   <label>
                     Plan
@@ -270,6 +275,9 @@ export default function AdminDashboard({ adminLabel }: Props) {
                       onChange={(event) => setPlan(event.target.value as BillingPlan)}
                     >
                       <option value="free">Free</option>
+                      <option value="monthly">1 Month</option>
+                      <option value="semiannual">6 Months</option>
+                      <option value="yearly">1 Year</option>
                       <option value="lifetime">Lifetime</option>
                     </select>
                   </label>

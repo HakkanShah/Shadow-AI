@@ -12,7 +12,7 @@ const sections = [
   },
   {
     title: "Billing & Activation",
-    body: "Billing is manual right now. Access is controlled by Firestore document users/{uid}/billing/state with plan set to free or lifetime."
+    body: "Billing is manual right now. Access is controlled by Firestore document users/{uid}/billing/state with plan set to free, monthly, semiannual, yearly, or lifetime."
   },
   {
     title: "Data & Privacy",
