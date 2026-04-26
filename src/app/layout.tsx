@@ -1,33 +1,28 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
-  variable: "--font-ibm-plex-mono",
-  weight: ["400", "500"],
+const mono = JetBrains_Mono({
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "ShadowWeb",
-  description: "Shadow admin control panel and product documentation",
+  title: "Shadow — the AI overlay your screen-share can't see",
+  description:
+    "An invisible desktop overlay for interviews, aptitude rounds, coding, and meetings. Local-first via Whisper + Ollama. Excluded from Zoom, Teams, Meet.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${ibmPlexMono.variable}`}>
-        {children}
-      </body>
+      <body className={`${inter.variable} ${mono.variable}`}>{children}</body>
     </html>
   );
 }
