@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
+  INSTALL_SECTION_ID,
   RELEASE_NOTES_URL,
-  RELEASE_VERSION,
-  REPO_URL,
+  RELEASE_REPO_URL,
   WINDOWS_DOWNLOAD_URL,
 } from "@/lib/site";
 import s from "./landing.module.css";
@@ -19,7 +19,7 @@ const features = [
 
 const modes = [
   { key: "/qa", name: "QA", desc: "Snap a screenshot, get the solution." },
-  { key: "/apti", name: "Aptitude", desc: "Quant & logic with proper math notation." },
+  { key: "/apti", name: "Aptitude", desc: "Quant and logic with proper math notation." },
   { key: "/coding", name: "Coding", desc: "Algorithms, syntax-highlighted code." },
   { key: "/interview", name: "Interview", desc: "Real-time coaching, live mic." },
   { key: "/meeting", name: "Meeting", desc: "Transcript, summary, action items." },
@@ -31,7 +31,6 @@ export default function LandingPage() {
       <div className={s.bgGrid} />
       <div className={s.bgGlow} />
 
-      {/* nav */}
       <div className={s.navWrap}>
         <div className={s.nav}>
           <Link href="/" className={s.brand}>
@@ -40,16 +39,15 @@ export default function LandingPage() {
           </Link>
           <nav className={s.navLinks}>
             <a href="#modes">Modes</a>
-            <a href="#install">Install</a>
-            <a href={REPO_URL}>GitHub</a>
+            <a href={`#${INSTALL_SECTION_ID}`}>Install</a>
+            <a href={RELEASE_REPO_URL}>GitHub</a>
           </nav>
-          <a href={WINDOWS_DOWNLOAD_URL} className={s.navCta}>
+          <a href={`#${INSTALL_SECTION_ID}`} className={s.navCta}>
             Get Shadow
           </a>
         </div>
       </div>
 
-      {/* hero */}
       <section className={s.hero}>
         <div className={s.container}>
           <div className={s.heroGrid}>
@@ -71,22 +69,21 @@ export default function LandingPage() {
               </p>
 
               <div className={s.ctas}>
-                <a href={WINDOWS_DOWNLOAD_URL} className={s.btnPrimary}>
+                <a href={`#${INSTALL_SECTION_ID}`} className={s.btnPrimary}>
                   <DownloadIcon size={16} />
                   Download
                 </a>
-                <a href="#install" className={s.btnGhost}>
+                <a href="#modes" className={s.btnGhost}>
                   See features
                 </a>
               </div>
 
               <p className={s.metaRow}>
                 <span className={s.metaDot} />
-                v{RELEASE_VERSION} beta active
+                Latest Windows build · beta active
               </p>
             </div>
 
-            {/* visual stage */}
             <div className={s.stage}>
               <div className={s.stageGlow} />
               <div className={s.stageEye}>
@@ -99,14 +96,14 @@ export default function LandingPage() {
                   <span className={s.recDot} />
                 </div>
                 <p className={s.cardText}>
-                  &ldquo;design a notification service for ten million users…&rdquo;
+                  &ldquo;Design a notification service for ten million users...&rdquo;
                 </p>
               </div>
 
               <div className={s.cardDraft}>
                 <div className={`${s.cardLabel} ${s.cardLabelViolet}`}>
                   DRAFT
-                  <span style={{ color: "var(--ink-mute)" }}>⌘ ↵</span>
+                  <span style={{ color: "var(--ink-mute)" }}>Cmd + Enter</span>
                 </div>
                 <p className={s.cardText}>
                   Read/write split. Producer fans events to a queue; workers route per channel.
@@ -117,7 +114,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* feature band */}
       <section className={s.featureBand}>
         <div className={s.container}>
           <div className={s.featureGrid}>
@@ -131,7 +127,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* modes */}
       <section id="modes" className={s.modes}>
         <div className={s.container}>
           <header className={s.sectionHeader}>
@@ -170,8 +165,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* install */}
-      <section id="install" className={s.install}>
+      <section id={INSTALL_SECTION_ID} className={s.install}>
         <div className={s.container}>
           <header className={s.sectionHeader}>
             <span className={s.sectionEyebrow}>
@@ -181,7 +175,7 @@ export default function LandingPage() {
               Install Shadow<span>.</span>
             </h2>
             <p className={s.sectionSub}>
-              Run it once. Auto-updates after that. API keys live in your OS keychain — never on disk.
+              Run it once. Auto-updates after that. API keys live in your OS keychain and never on disk.
             </p>
           </header>
 
@@ -192,7 +186,7 @@ export default function LandingPage() {
                 <span className={s.platformLiveDot} />
               </div>
               <h3 className={s.platformOs}>Windows</h3>
-              <p className={s.platformSub}>Windows 10 / 11 · 64-bit · ~120 MB</p>
+              <p className={s.platformSub}>Windows 10 / 11 · 64-bit · latest stable installer</p>
               <span className={s.platformCta}>
                 <DownloadIcon size={16} />
                 Download .exe
@@ -215,14 +209,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* footer */}
       <footer className={s.footer}>
         <div className={s.container}>
           <div className={s.footerInner}>
             <span>© 2026 Shadow · by Hakkan Shah</span>
             <div className={s.footerLinks}>
-              <a href={REPO_URL}>github</a>
-              <a href={RELEASE_NOTES_URL}>v{RELEASE_VERSION}</a>
+              <a href={RELEASE_REPO_URL}>github</a>
+              <a href={RELEASE_NOTES_URL}>latest release</a>
               <span className={s.footerOnline}>
                 <span className={s.metaDot} />
                 online
@@ -235,7 +228,6 @@ export default function LandingPage() {
   );
 }
 
-/* ─────────── icons ─────────── */
 function Logo({ size = 24 }: { size?: number }) {
   return (
     <svg viewBox="0 0 32 32" width={size} height={size} fill="none">
