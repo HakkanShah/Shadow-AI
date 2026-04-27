@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -25,7 +26,49 @@ const modes = [
   { key: "/meeting", name: "Meeting", desc: "Transcript, summary, action items." },
 ];
 
+type LatestReleasePayload = {
+  version: string | null;
+  releaseNotesUrl: string | null;
+};
+
 export default function LandingPage() {
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [latestReleaseNotesUrl, setLatestReleaseNotesUrl] = useState<string>(RELEASE_NOTES_URL);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLatestRelease = async () => {
+      try {
+        const response = await fetch("/api/release/latest", { cache: "no-store" });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as LatestReleasePayload;
+        if (cancelled) return;
+
+        if (payload.version) {
+          setLatestVersion(payload.version);
+        }
+        if (payload.releaseNotesUrl) {
+          setLatestReleaseNotesUrl(payload.releaseNotesUrl);
+        }
+      } catch {
+        // Fall back to generic latest-release copy.
+      }
+    };
+
+    void loadLatestRelease();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const latestVersionLabel = latestVersion ? `v${latestVersion}` : "latest";
+  const heroBuildLabel = latestVersion ? `${latestVersionLabel} beta active` : "Latest Windows build · beta active";
+  const windowsInstallerLabel = latestVersion
+    ? `Windows 10 / 11 · 64-bit · ${latestVersionLabel} installer`
+    : "Windows 10 / 11 · 64-bit · latest stable installer";
+
   return (
     <main className={s.page}>
       <div className={s.bgGrid} />
@@ -80,7 +123,7 @@ export default function LandingPage() {
 
               <p className={s.metaRow}>
                 <span className={s.metaDot} />
-                Latest Windows build · beta active
+                {heroBuildLabel}
               </p>
             </div>
 
@@ -186,7 +229,7 @@ export default function LandingPage() {
                 <span className={s.platformLiveDot} />
               </div>
               <h3 className={s.platformOs}>Windows</h3>
-              <p className={s.platformSub}>Windows 10 / 11 · 64-bit · latest stable installer</p>
+              <p className={s.platformSub}>{windowsInstallerLabel}</p>
               <span className={s.platformCta}>
                 <DownloadIcon size={16} />
                 Download .exe
@@ -215,7 +258,7 @@ export default function LandingPage() {
             <span>© 2026 Shadow · by Hakkan Shah</span>
             <div className={s.footerLinks}>
               <a href={RELEASE_REPO_URL}>github</a>
-              <a href={RELEASE_NOTES_URL}>latest release</a>
+              <a href={latestReleaseNotesUrl}>{latestVersion ? `${latestVersionLabel} release` : "latest release"}</a>
               <span className={s.footerOnline}>
                 <span className={s.metaDot} />
                 online
